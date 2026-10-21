@@ -1,0 +1,4 @@
+{
+  "name": "SportBridge Dev",
+  "postStartCommand": "echo '🏋️ SportBridge ready! Run: ./start.sh'"
+}
