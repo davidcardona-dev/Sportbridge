@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
+import { supabase } from '../lib/supabase';
 
 const SPORTS = [
-  { id: 'futbol', name: 'Fútbol', icon: 'soccer' as const, color: COLORS.football },
-  { id: 'basket', name: 'Basket', icon: 'basketball' as const, color: COLORS.basketball },
-  { id: 'volley', name: 'Volley', icon: 'volleyball' as const, color: COLORS.volleyball },
-  { id: 'tennis', name: 'Tennis', icon: 'tennis' as const, color: COLORS.tennis },
-  { id: 'running', name: 'Running', icon: 'run-fast' as const, color: COLORS.running },
+  { id: 'Fútbol', name: 'Fútbol', icon: 'soccer' as const, color: COLORS.football },
+  { id: 'Basketball', name: 'Basket', icon: 'basketball' as const, color: COLORS.basketball },
+  { id: 'Volleyball', name: 'Volley', icon: 'volleyball' as const, color: COLORS.volleyball },
+  { id: 'Tennis', name: 'Tennis', icon: 'tennis' as const, color: COLORS.tennis },
+  { id: 'Running', name: 'Running', icon: 'run-fast' as const, color: COLORS.running },
 ];
 
 const LEVELS = ['Principiante', 'Intermedio', 'Avanzado', 'Todos'];
@@ -19,6 +20,48 @@ export default function CreateMatchScreen() {
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  async function handleCreate() {
+    if (!selectedSport || !title || !location || !maxPlayers || !selectedLevel) {
+      Alert.alert('Campos incompletos', 'Por favor llena todos los campos para crear el partido.');
+      return;
+    }
+
+    setSaving(true);
+    setSuccess(false);
+
+    const matchDate = new Date();
+    matchDate.setDate(matchDate.getDate() + 2);
+
+    const { error } = await supabase.from('matches').insert({
+      sport: selectedSport,
+      title: title,
+      location: location,
+      match_date: matchDate.toISOString(),
+      max_players: parseInt(maxPlayers),
+      current_players: 1,
+      level: selectedLevel,
+      status: 'open',
+      creator_id: '92e067e9-f856-4652-8a18-5b33377e305e',
+    });
+
+    setSaving(false);
+
+    if (error) {
+      Alert.alert('Error', 'No se pudo crear el partido. Intenta de nuevo.');
+      console.log('Error:', error.message);
+    } else {
+      setSuccess(true);
+      setTitle('');
+      setLocation('');
+      setMaxPlayers('');
+      setSelectedSport('');
+      setSelectedLevel('');
+      setTimeout(() => setSuccess(false), 4000);
+    }
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -26,6 +69,14 @@ export default function CreateMatchScreen() {
         <Text style={styles.title}>Crear Partido</Text>
         <Text style={styles.subtitle}>Organiza un partido y encuentra jugadores</Text>
       </View>
+
+      {/* Success Message */}
+      {success && (
+        <View style={styles.successBanner}>
+          <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+          <Text style={styles.successText}>¡Partido creado exitosamente! Ya aparece en Inicio.</Text>
+        </View>
+      )}
 
       {/* Sport Selection */}
       <Text style={styles.label}>Deporte</Text>
@@ -108,9 +159,17 @@ export default function CreateMatchScreen() {
       </View>
 
       {/* Create Button */}
-      <TouchableOpacity style={styles.createButton}>
-        <Ionicons name="add-circle-outline" size={20} color={COLORS.bgDark} />
-        <Text style={styles.createButtonText}>Crear Partido</Text>
+      <TouchableOpacity
+        style={[styles.createButton, saving && { opacity: 0.6 }]}
+        onPress={handleCreate}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator size="small" color={COLORS.bgDark} />
+        ) : (
+          <Ionicons name="add-circle-outline" size={20} color={COLORS.bgDark} />
+        )}
+        <Text style={styles.createButtonText}>{saving ? 'Creando...' : 'Crear Partido'}</Text>
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
@@ -136,6 +195,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success + '15',
+    marginHorizontal: 20,
+    padding: 14,
+    borderRadius: 12,
+    gap: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.success + '30',
+  },
+  successText: {
+    color: COLORS.success,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   label: {
     fontSize: 14,
