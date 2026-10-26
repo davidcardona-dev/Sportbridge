@@ -1,41 +1,73 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
+import { supabase } from '../lib/supabase';
 
-const PLAYER_STATS = {
-  name: 'David Cardona',
-  username: '@davidcardona',
-  location: 'Medellín, Colombia',
-  mainSport: 'Fútbol',
-  rating: 7.8,
-  matchesPlayed: 23,
-  wins: 14,
-  draws: 5,
-  losses: 4,
-  mvp: 5,
-  streak: '3 victorias seguidas',
-  sports: [
-    { name: 'Fútbol', icon: 'soccer' as const, color: COLORS.football },
-    { name: 'Basket', icon: 'basketball' as const, color: COLORS.basketball },
-    { name: 'Running', icon: 'run-fast' as const, color: COLORS.running },
-  ],
-  recentMatches: [
-    { date: 'Oct 20', sport: 'soccer' as const, sportColor: COLORS.football, result: 'W', score: '4-2', rating: 8.2 },
-    { date: 'Oct 18', sport: 'soccer' as const, sportColor: COLORS.football, result: 'W', score: '3-1', rating: 7.5 },
-    { date: 'Oct 15', sport: 'basketball' as const, sportColor: COLORS.basketball, result: 'L', score: '18-21', rating: 6.8 },
-    { date: 'Oct 12', sport: 'soccer' as const, sportColor: COLORS.football, result: 'W', score: '5-3', rating: 8.9 },
-    { date: 'Oct 10', sport: 'soccer' as const, sportColor: COLORS.football, result: 'D', score: '2-2', rating: 7.1 },
-  ],
-  reviews: [
-    { user: 'Carlos M.', text: 'Buen jugador, muy puntual', stars: 5 },
-    { user: 'Andrés R.', text: 'Excelente nivel, fair play', stars: 5 },
-    { user: 'Juan P.', text: 'Buen compañero de equipo', stars: 4 },
-  ],
+const SPORT_ICON_MAP: Record<string, { icon: string; color: string }> = {
+  'Fútbol': { icon: 'soccer', color: COLORS.football },
+  'Basketball': { icon: 'basketball', color: COLORS.basketball },
+  'Volleyball': { icon: 'volleyball', color: COLORS.volleyball },
+  'Tennis': { icon: 'tennis', color: COLORS.tennis },
+  'Running': { icon: 'run-fast', color: COLORS.running },
+};
+
+type Player = {
+  id: string;
+  name: string;
+  username: string;
+  location: string;
+  main_sport: string;
+  rating: number;
+  matches_played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  mvp_count: number;
 };
 
 export default function ProfileScreen() {
-  const winRate = Math.round((PLAYER_STATS.wins / PLAYER_STATS.matchesPlayed) * 100);
+  const [player, setPlayer] = useState<Player | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  async function fetchProfile() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .eq('username', '@davidcardona')
+      .single();
+
+    if (!error && data) {
+      setPlayer(data);
+    }
+    setLoading(false);
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ color: COLORS.textSecondary, marginTop: 12 }}>Cargando perfil...</Text>
+      </View>
+    );
+  }
+
+  if (!player) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="person-outline" size={48} color={COLORS.textMuted} />
+        <Text style={{ color: COLORS.textSecondary, marginTop: 12 }}>Perfil no encontrado</Text>
+      </View>
+    );
+  }
+
+  const winRate = Math.round((player.wins / player.matches_played) * 100);
+  const sportVisual = SPORT_ICON_MAP[player.main_sport] || { icon: 'soccer', color: COLORS.primary };
 
   return (
     <ScrollView style={styles.container}>
@@ -44,18 +76,28 @@ export default function ProfileScreen() {
         <View style={styles.avatarContainer}>
           <Ionicons name="person" size={36} color={COLORS.primary} />
         </View>
-        <Text style={styles.name}>{PLAYER_STATS.name}</Text>
-        <Text style={styles.username}>{PLAYER_STATS.username}</Text>
+        <Text style={styles.name}>{player.name}</Text>
+        <Text style={styles.username}>@{player.username}</Text>
         <View style={styles.locationRow}>
           <Ionicons name="location-sharp" size={13} color={COLORS.accent} />
-          <Text style={styles.location}>{PLAYER_STATS.location}</Text>
+          <Text style={styles.location}>{player.location}</Text>
         </View>
-        <View style={styles.ratingBadge}>
-          <Text style={styles.ratingText}>{PLAYER_STATS.rating}</Text>
+        <View style={[styles.ratingBadge, {
+          backgroundColor: Number(player.rating) >= 8.5 ? COLORS.success : Number(player.rating) >= 7 ? COLORS.primary : COLORS.warning,
+        }]}>
+          <Text style={styles.ratingText}>{Number(player.rating).toFixed(1)}</Text>
         </View>
-        <View style={styles.streakRow}>
-          <Ionicons name="flame" size={14} color={COLORS.accent} />
-          <Text style={styles.streak}>{PLAYER_STATS.streak}</Text>
+      </View>
+
+      {/* Main Sport */}
+      <View style={styles.sectionHeader}>
+        <MaterialCommunityIcons name={sportVisual.icon as any} size={18} color={sportVisual.color} />
+        <Text style={styles.sectionTitle}>Deporte principal</Text>
+      </View>
+      <View style={styles.mainSportRow}>
+        <View style={[styles.sportTag, { borderColor: sportVisual.color }]}>
+          <MaterialCommunityIcons name={sportVisual.icon as any} size={16} color={sportVisual.color} />
+          <Text style={[styles.sportTagText, { color: sportVisual.color }]}>{player.main_sport}</Text>
         </View>
       </View>
 
@@ -66,19 +108,19 @@ export default function ProfileScreen() {
       </View>
       <View style={styles.statsGrid}>
         <View style={styles.statBox}>
-          <Text style={styles.statNumber}>{PLAYER_STATS.matchesPlayed}</Text>
+          <Text style={styles.statNumber}>{player.matches_played}</Text>
           <Text style={styles.statLabel}>Partidos</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: COLORS.success }]}>{PLAYER_STATS.wins}</Text>
+          <Text style={[styles.statNumber, { color: COLORS.success }]}>{player.wins}</Text>
           <Text style={styles.statLabel}>Victorias</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statNumber}>{PLAYER_STATS.draws}</Text>
+          <Text style={styles.statNumber}>{player.draws}</Text>
           <Text style={styles.statLabel}>Empates</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: COLORS.error }]}>{PLAYER_STATS.losses}</Text>
+          <Text style={[styles.statNumber, { color: COLORS.error }]}>{player.losses}</Text>
           <Text style={styles.statLabel}>Derrotas</Text>
         </View>
         <View style={styles.statBox}>
@@ -86,73 +128,39 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Win Rate</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: COLORS.accent }]}>{PLAYER_STATS.mvp}</Text>
+          <Text style={[styles.statNumber, { color: COLORS.accent }]}>{player.mvp_count}</Text>
           <Text style={styles.statLabel}>MVP</Text>
         </View>
       </View>
 
-      {/* Sports */}
+      {/* Performance Bar */}
       <View style={styles.sectionHeader}>
-        <Ionicons name="trophy-outline" size={18} color={COLORS.warning} />
-        <Text style={styles.sectionTitle}>Deportes</Text>
+        <Ionicons name="bar-chart" size={18} color={COLORS.primaryLight} />
+        <Text style={styles.sectionTitle}>Rendimiento</Text>
       </View>
-      <View style={styles.sportsRow}>
-        {PLAYER_STATS.sports.map((sport) => (
-          <View key={sport.name} style={[styles.sportTag, { borderColor: sport.color }]}>
-            <MaterialCommunityIcons name={sport.icon} size={16} color={sport.color} />
-            <Text style={[styles.sportTagText, { color: sport.color }]}>{sport.name}</Text>
+      <View style={styles.performanceCard}>
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Victorias</Text>
+          <View style={styles.perfBarBg}>
+            <View style={[styles.perfBarFill, { width: `${winRate}%`, backgroundColor: COLORS.success }]} />
           </View>
-        ))}
-      </View>
-
-      {/* Recent Matches */}
-      <View style={styles.sectionHeader}>
-        <Ionicons name="calendar-outline" size={18} color={COLORS.primaryLight} />
-        <Text style={styles.sectionTitle}>Últimos partidos</Text>
-      </View>
-      {PLAYER_STATS.recentMatches.map((match, index) => (
-        <View key={index} style={styles.matchRow}>
-          <Text style={styles.matchDate}>{match.date}</Text>
-          <View style={[styles.matchSportIcon, { backgroundColor: match.sportColor + '20' }]}>
-            <MaterialCommunityIcons name={match.sport} size={16} color={match.sportColor} />
-          </View>
-          <Text style={[
-            styles.matchResult,
-            { color: match.result === 'W' ? COLORS.success : match.result === 'L' ? COLORS.error : COLORS.warning }
-          ]}>
-            {match.result === 'W' ? 'Victoria' : match.result === 'L' ? 'Derrota' : 'Empate'}
-          </Text>
-          <Text style={styles.matchScore}>{match.score}</Text>
-          <View style={[
-            styles.ratingSmall,
-            { backgroundColor: match.rating >= 8 ? COLORS.success + '20' : match.rating >= 7 ? COLORS.warning + '20' : COLORS.error + '20' }
-          ]}>
-            <Text style={[
-              styles.ratingSmallText,
-              { color: match.rating >= 8 ? COLORS.success : match.rating >= 7 ? COLORS.warning : COLORS.error }
-            ]}>{match.rating}</Text>
-          </View>
+          <Text style={[styles.perfValue, { color: COLORS.success }]}>{winRate}%</Text>
         </View>
-      ))}
-
-      {/* Reviews */}
-      <View style={styles.sectionHeader}>
-        <Ionicons name="chatbubble-outline" size={18} color={COLORS.secondaryLight} />
-        <Text style={styles.sectionTitle}>Reviews</Text>
-      </View>
-      {PLAYER_STATS.reviews.map((review, index) => (
-        <View key={index} style={styles.reviewCard}>
-          <View style={styles.reviewHeader}>
-            <Text style={styles.reviewUser}>{review.user}</Text>
-            <View style={styles.starsRow}>
-              {Array.from({ length: review.stars }).map((_, i) => (
-                <Ionicons key={i} name="star" size={12} color={COLORS.warning} />
-              ))}
-            </View>
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Empates</Text>
+          <View style={styles.perfBarBg}>
+            <View style={[styles.perfBarFill, { width: `${Math.round((player.draws / player.matches_played) * 100)}%`, backgroundColor: COLORS.warning }]} />
           </View>
-          <Text style={styles.reviewText}>{review.text}</Text>
+          <Text style={[styles.perfValue, { color: COLORS.warning }]}>{Math.round((player.draws / player.matches_played) * 100)}%</Text>
         </View>
-      ))}
+        <View style={styles.perfRow}>
+          <Text style={styles.perfLabel}>Derrotas</Text>
+          <View style={styles.perfBarBg}>
+            <View style={[styles.perfBarFill, { width: `${Math.round((player.losses / player.matches_played) * 100)}%`, backgroundColor: COLORS.error }]} />
+          </View>
+          <Text style={[styles.perfValue, { color: COLORS.error }]}>{Math.round((player.losses / player.matches_played) * 100)}%</Text>
+        </View>
+      </View>
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -202,7 +210,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   ratingBadge: {
-    backgroundColor: COLORS.primary,
     width: 52,
     height: 52,
     borderRadius: 16,
@@ -214,17 +221,6 @@ const styles = StyleSheet.create({
     color: COLORS.bgDark,
     fontSize: 20,
     fontWeight: 'bold',
-  },
-  streakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    gap: 4,
-  },
-  streak: {
-    fontSize: 13,
-    color: COLORS.accent,
-    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -238,6 +234,24 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
+  },
+  mainSportRow: {
+    paddingHorizontal: 20,
+  },
+  sportTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.bgCard,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  sportTagText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -262,90 +276,38 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  sportsRow: {
+  performanceCard: {
+    backgroundColor: COLORS.bgCard,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    gap: 14,
+  },
+  perfRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    alignItems: 'center',
     gap: 10,
   },
-  sportTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgCard,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    gap: 6,
-  },
-  sportTagText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgCard,
-    marginHorizontal: 16,
-    marginBottom: 6,
-    borderRadius: 12,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  matchDate: {
+  perfLabel: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    width: 48,
+    width: 65,
   },
-  matchSportIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+  perfBarBg: {
+    flex: 1,
+    height: 8,
+    backgroundColor: COLORS.bgDark,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  matchResult: {
-    fontSize: 12,
-    fontWeight: '600',
-    width: 58,
+  perfBarFill: {
+    height: '100%',
+    borderRadius: 4,
   },
-  matchScore: {
+  perfValue: {
     fontSize: 13,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-    width: 42,
-  },
-  ratingSmall: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  ratingSmallText: {
-    fontSize: 12,
     fontWeight: 'bold',
-  },
-  reviewCard: {
-    backgroundColor: COLORS.bgCard,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    padding: 14,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  reviewUser: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  reviewText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    width: 40,
+    textAlign: 'right',
   },
 });
