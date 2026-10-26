@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
+import { supabase } from '../lib/supabase';
 
 const SPORTS = [
+  { name: 'Todos', icon: 'all-inclusive' as const, color: COLORS.primary },
   { name: 'Fútbol', icon: 'soccer' as const, color: COLORS.football },
   { name: 'Basket', icon: 'basketball' as const, color: COLORS.basketball },
   { name: 'Volley', icon: 'volleyball' as const, color: COLORS.volleyball },
@@ -11,40 +13,79 @@ const SPORTS = [
   { name: 'Running', icon: 'run-fast' as const, color: COLORS.running },
 ];
 
-const MOCK_MATCHES = [
-  {
-    id: '1',
-    sport: 'soccer' as const,
-    sportColor: COLORS.football,
-    title: 'Fútbol 5 en El Poblado',
-    location: 'Cancha La 10, Medellín',
-    date: 'Hoy — 7:00 PM',
-    players: '7/10',
-    level: 'Intermedio',
-  },
-  {
-    id: '2',
-    sport: 'basketball' as const,
-    sportColor: COLORS.basketball,
-    title: 'Basket 3v3 en Laureles',
-    location: 'Parque de Laureles, Medellín',
-    date: 'Mañana — 5:00 PM',
-    players: '4/6',
-    level: 'Todos los niveles',
-  },
-  {
-    id: '3',
-    sport: 'volleyball' as const,
-    sportColor: COLORS.volleyball,
-    title: 'Volley mixto en Envigado',
-    location: 'Polideportivo Sur, Envigado',
-    date: 'Sábado — 9:00 AM',
-    players: '8/12',
-    level: 'Avanzado',
-  },
-];
+const SPORT_ICON_MAP: Record<string, { icon: string; color: string }> = {
+  'Fútbol': { icon: 'soccer', color: COLORS.football },
+  'Basketball': { icon: 'basketball', color: COLORS.basketball },
+  'Volleyball': { icon: 'volleyball', color: COLORS.volleyball },
+  'Tennis': { icon: 'tennis', color: COLORS.tennis },
+  'Running': { icon: 'run-fast', color: COLORS.running },
+};
+
+type Match = {
+  id: string;
+  sport: string;
+  title: string;
+  location: string;
+  match_date: string;
+  max_players: number;
+  current_players: number;
+  level: string;
+  status: string;
+};
 
 export default function HomeScreen() {
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSport, setSelectedSport] = useState('Todos');
+
+  useEffect(() => {
+    fetchMatches();
+  }, [selectedSport]);
+
+  async function fetchMatches() {
+    setLoading(true);
+    let query = supabase
+      .from('matches')
+      .select('*')
+      .eq('status', 'open')
+      .order('match_date', { ascending: true });
+
+    if (selectedSport !== 'Todos') {
+      query = query.eq('sport', selectedSport === 'Basket' ? 'Basketball' : selectedSport === 'Volley' ? 'Volleyball' : selectedSport);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching matches:', error);
+    } else {
+      setMatches(data || []);
+    }
+    setLoading(false);
+  }
+
+  function formatDate(dateStr: string) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    const time = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+    if (diffDays === 0 && diffHours > 0) return `Hoy — ${time}`;
+    if (diffDays === 1) return `Mañana — ${time}`;
+    if (diffDays < 7) {
+      const dayName = date.toLocaleDateString('es-CO', { weekday: 'long' });
+      return `${dayName.charAt(0).toUpperCase() + dayName.slice(1)} — ${time}`;
+    }
+    return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }) + ` — ${time}`;
+  }
+
+  function getSportVisual(sport: string) {
+    return SPORT_ICON_MAP[sport] || { icon: 'soccer', color: COLORS.primary };
+  }
+
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
@@ -67,8 +108,16 @@ export default function HomeScreen() {
       {/* Sports Filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportsRow}>
         {SPORTS.map((sport) => (
-          <TouchableOpacity key={sport.name} style={[styles.sportChip, { borderColor: sport.color }]}>
-            <MaterialCommunityIcons name={sport.icon} size={18} color={sport.color} />
+          <TouchableOpacity
+            key={sport.name}
+            style={[
+              styles.sportChip,
+              { borderColor: sport.color },
+              selectedSport === sport.name && { backgroundColor: sport.color + '20' },
+            ]}
+            onPress={() => setSelectedSport(sport.name)}
+          >
+            <MaterialCommunityIcons name={sport.icon as any} size={18} color={sport.color} />
             <Text style={[styles.sportChipText, { color: sport.color }]}>{sport.name}</Text>
           </TouchableOpacity>
         ))}
@@ -77,43 +126,63 @@ export default function HomeScreen() {
       {/* Section Title */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Partidos cerca de ti</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>Ver todos</Text>
+        <TouchableOpacity onPress={fetchMatches}>
+          <Ionicons name="refresh-outline" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Matches */}
-      {MOCK_MATCHES.map((match) => (
-        <TouchableOpacity key={match.id} style={styles.matchCard}>
-          <View style={styles.matchHeader}>
-            <View style={[styles.sportIcon, { backgroundColor: match.sportColor + '20' }]}>
-              <MaterialCommunityIcons name={match.sport} size={22} color={match.sportColor} />
+      {/* Loading */}
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Cargando partidos...</Text>
+        </View>
+      )}
+
+      {/* No matches */}
+      {!loading && matches.length === 0 && (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="search-outline" size={48} color={COLORS.textMuted} />
+          <Text style={styles.emptyText}>No hay partidos disponibles</Text>
+          <Text style={styles.emptySubtext}>¡Crea uno y sé el primero!</Text>
+        </View>
+      )}
+
+      {/* Matches from Supabase */}
+      {!loading && matches.map((match) => {
+        const visual = getSportVisual(match.sport);
+        return (
+          <TouchableOpacity key={match.id} style={styles.matchCard}>
+            <View style={styles.matchHeader}>
+              <View style={[styles.sportIcon, { backgroundColor: visual.color + '20' }]}>
+                <MaterialCommunityIcons name={visual.icon as any} size={22} color={visual.color} />
+              </View>
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelText}>{match.level}</Text>
+              </View>
             </View>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>{match.level}</Text>
+            <Text style={styles.matchTitle}>{match.title}</Text>
+            <View style={styles.matchInfoRow}>
+              <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.matchInfo}>{match.location}</Text>
             </View>
-          </View>
-          <Text style={styles.matchTitle}>{match.title}</Text>
-          <View style={styles.matchInfoRow}>
-            <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.matchInfo}>{match.location}</Text>
-          </View>
-          <View style={styles.matchInfoRow}>
-            <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.matchInfo}>{match.date}</Text>
-          </View>
-          <View style={styles.matchFooter}>
-            <View style={styles.playersRow}>
-              <Ionicons name="people-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.matchPlayers}>{match.players} jugadores</Text>
+            <View style={styles.matchInfoRow}>
+              <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.matchInfo}>{formatDate(match.match_date)}</Text>
             </View>
-            <TouchableOpacity style={styles.joinButton}>
-              <Text style={styles.joinButtonText}>Unirme</Text>
-              <Ionicons name="arrow-forward" size={14} color={COLORS.bgDark} />
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      ))}
+            <View style={styles.matchFooter}>
+              <View style={styles.playersRow}>
+                <Ionicons name="people-outline" size={16} color={COLORS.textSecondary} />
+                <Text style={styles.matchPlayers}>{match.current_players}/{match.max_players} jugadores</Text>
+              </View>
+              <TouchableOpacity style={styles.joinButton}>
+                <Text style={styles.joinButtonText}>Unirme</Text>
+                <Ionicons name="arrow-forward" size={14} color={COLORS.bgDark} />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
 
       <View style={{ height: 30 }} />
     </ScrollView>
@@ -198,10 +267,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
-  seeAll: {
-    fontSize: 13,
-    color: COLORS.primary,
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  emptySubtext: {
+    color: COLORS.textMuted,
+    fontSize: 13,
   },
   matchCard: {
     backgroundColor: COLORS.bgCard,
